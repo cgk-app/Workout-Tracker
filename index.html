@@ -1,0 +1,476 @@
+import React, { useState, useEffect } from 'react';
+import { ChevronLeft, ChevronRight, Calendar, Dumbbell, Plus, Trash2, Edit2, Save, TrendingUp, ChevronUp, ChevronDown } from 'lucide-react';
+
+const WorkoutTracker = () => {
+  const [view, setView] = useState('setup'); // 'setup' or 'tracking'
+  const [currentWeek, setCurrentWeek] = useState(1);
+  const [currentDay, setCurrentDay] = useState(1);
+  const [editingDay, setEditingDay] = useState(null);
+  const [blockName, setBlockName] = useState('Gettin Lorge - Meso 1');
+  const [blockNote, setBlockNote] = useState('Arm focus incl delts and forearms');
+  const [workouts, setWorkouts] = useState({
+    1: {
+      name: "Day 1 - Pull (Hypertrophy)",
+      exercises: [
+        { name: "Machine Row", reps: "6-8", baseSets: 3, baseRir: 4, progression: "linear" },
+        { name: "Pull Ups", reps: "10-20", baseSets: 3, baseRir: 4, progression: "maintain" },
+        { name: "Single arm LPD", reps: "8-15", baseSets: 3, baseRir: 4, progression: "maintain" },
+        { name: "Single arm preacher", reps: "8-10", baseSets: 3, baseRir: 4, progression: "maintain" },
+        { name: "Barbell wrist curl", reps: "20-30", baseSets: 3, baseRir: 4, progression: "maintain" }
+      ]
+    },
+    2: {
+      name: "Day 2 - Push (Hypertrophy)",
+      exercises: [
+        { name: "CG Feet Up Bench", reps: "6", baseSets: 3, baseRir: 4, progression: "linear" },
+        { name: "Dumbbell Incline", reps: "12", baseSets: 3, baseRir: 4, progression: "maintain" },
+        { name: "BB Skullcrusher", reps: "8-10", baseSets: 3, baseRir: 4, progression: "maintain" },
+        { name: "Dumbbell Lateral Raise", reps: "10-12", baseSets: 3, baseRir: 4, progression: "maintain" },
+        { name: "Dumbbell Skull Crusher", reps: "10-20", baseSets: 3, baseRir: 4, progression: "maintain" }
+      ]
+    },
+    3: {
+      name: "Day 3 - Legs (Strength)",
+      exercises: [
+        { name: "Tempo Squat", reps: "5", baseSets: 2, baseRir: 5, progression: "aggressive" },
+        { name: "Glute machine", reps: "8", baseSets: 3, baseRir: 4, progression: "maintain" },
+        { name: "Hamstring Curl", reps: "12", baseSets: 3, baseRir: 4, progression: "maintain" },
+        { name: "Adductor", reps: "15-20", baseSets: 3, baseRir: 4, progression: "maintain" }
+      ]
+    },
+    4: {
+      name: "Day 4 - Pull (Hypertrophy)",
+      exercises: [
+        { name: "Deadlift (Beltless Sumo)", reps: "5", baseSets: 1, baseRir: 5, progression: "moderate" },
+        { name: "Dumbbell Row", reps: "6-8", baseSets: 3, baseRir: 4, progression: "maintain" },
+        { name: "Wide Grip LPD", reps: "8-12", baseSets: 3, baseRir: 4, progression: "maintain" },
+        { name: "Alternating Bicep Curl", reps: "6-8", baseSets: 3, baseRir: 4, progression: "maintain" }
+      ]
+    },
+    5: {
+      name: "Day 5 - Push",
+      exercises: [
+        { name: "Bench Press", reps: "2-4", baseSets: 1, baseRir: 5, progression: "aggressive" },
+        { name: "Incline Barbell", reps: "8", baseSets: 3, baseRir: 4, progression: "maintain" },
+        { name: "Machine delt", reps: "10-15", baseSets: 3, baseRir: 4, progression: "maintain" },
+        { name: "EZ Bar French Press", reps: "8-10", baseSets: 3, baseRir: 4, progression: "maintain" },
+        { name: "Dips mech dropset", reps: "AMRAP", baseSets: 3, baseRir: 0, progression: "maintain" }
+      ]
+    }
+  });
+  const [workoutData, setWorkoutData] = useState({});
+
+  const progressionPatterns = {
+    maintain: [0, 0, 0, 0, 0], // RIR stays same
+    linear: [0, -1, -1, -1, -1], // RIR decreases by 1 each week
+    moderate: [0, -1, 0, 0, 0], // RIR decreases then maintains
+    aggressive: [0, -1, -2, -3, -4] // RIR decreases significantly
+  };
+
+  const getSetsForWeek = (exercise, week) => {
+    if (exercise.progression === 'aggressive' && week > 1) {
+      return Math.min(exercise.baseSets + (week - 1), exercise.baseSets + 2);
+    }
+    if (exercise.progression === 'linear' && week > 1) {
+      return exercise.baseSets + 1;
+    }
+    return exercise.baseSets;
+  };
+
+  const getRirForWeek = (exercise, week) => {
+    const pattern = progressionPatterns[exercise.progression];
+    return Math.max(0, exercise.baseRir + pattern[week - 1]);
+  };
+
+  const addExercise = (dayNum) => {
+    setWorkouts(prev => ({
+      ...prev,
+      [dayNum]: {
+        ...prev[dayNum],
+        exercises: [
+          ...prev[dayNum].exercises,
+          { name: "New Exercise", reps: "8-12", baseSets: 3, baseRir: 4, progression: "maintain" }
+        ]
+      }
+    }));
+  };
+
+  const removeExercise = (dayNum, exerciseIdx) => {
+    setWorkouts(prev => ({
+      ...prev,
+      [dayNum]: {
+        ...prev[dayNum],
+        exercises: prev[dayNum].exercises.filter((_, idx) => idx !== exerciseIdx)
+      }
+    }));
+  };
+
+  const moveExercise = (dayNum, exerciseIdx, direction) => {
+    const exercises = [...workouts[dayNum].exercises];
+    const newIdx = direction === 'up' ? exerciseIdx - 1 : exerciseIdx + 1;
+    
+    if (newIdx < 0 || newIdx >= exercises.length) return;
+    
+    [exercises[exerciseIdx], exercises[newIdx]] = [exercises[newIdx], exercises[exerciseIdx]];
+    
+    setWorkouts(prev => ({
+      ...prev,
+      [dayNum]: {
+        ...prev[dayNum],
+        exercises
+      }
+    }));
+  };
+
+  const updateExercise = (dayNum, exerciseIdx, field, value) => {
+    setWorkouts(prev => ({
+      ...prev,
+      [dayNum]: {
+        ...prev[dayNum],
+        exercises: prev[dayNum].exercises.map((ex, idx) =>
+          idx === exerciseIdx ? { ...ex, [field]: value } : ex
+        )
+      }
+    }));
+  };
+
+  const handleWeightChange = (exerciseIdx, value) => {
+    const key = `${currentDay}-${currentWeek}-${exerciseIdx}`;
+    setWorkoutData(prev => ({
+      ...prev,
+      [key]: { ...prev[key], weight: value }
+    }));
+  };
+
+  const getData = (exerciseIdx) => {
+    const key = `${currentDay}-${currentWeek}-${exerciseIdx}`;
+    return workoutData[key] || { weight: '' };
+  };
+
+  const getProgressData = (dayNum, exerciseIdx) => {
+    const weeks = [];
+    for (let w = 1; w <= 5; w++) {
+      const key = `${dayNum}-${w}-${exerciseIdx}`;
+      weeks.push(workoutData[key]?.weight || '-');
+    }
+    return weeks;
+  };
+
+  if (view === 'setup') {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
+        <div className="max-w-4xl mx-auto">
+          {/* Header */}
+          <div className="bg-slate-800 rounded-xl p-6 mb-6">
+            <div className="flex items-center gap-3 mb-4">
+              <Dumbbell className="w-8 h-8 text-blue-400" />
+              <div className="flex-1">
+                <input
+                  type="text"
+                  value={blockName}
+                  onChange={(e) => setBlockName(e.target.value)}
+                  className="text-2xl font-bold text-white bg-slate-700 px-3 py-2 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"
+                  placeholder="Block name"
+                />
+                <input
+                  type="text"
+                  value={blockNote}
+                  onChange={(e) => setBlockNote(e.target.value)}
+                  className="text-sm text-slate-300 bg-slate-700 px-3 py-2 rounded-lg w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Block notes/goals"
+                />
+              </div>
+              <button
+                onClick={() => setView('tracking')}
+                className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold flex items-center gap-2 transition-colors"
+              >
+                <TrendingUp className="w-5 h-5" />
+                Start Tracking
+              </button>
+            </div>
+          </div>
+
+          {/* Day Tabs */}
+          <div className="bg-slate-800 rounded-xl p-4 mb-6">
+            <div className="grid grid-cols-5 gap-2">
+              {[1, 2, 3, 4, 5].map(day => (
+                <button
+                  key={day}
+                  onClick={() => setEditingDay(editingDay === day ? null : day)}
+                  className={`py-3 px-2 rounded-lg font-medium transition-all ${
+                    editingDay === day
+                      ? 'bg-blue-500 text-white shadow-lg'
+                      : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  }`}
+                >
+                  Day {day}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Exercise Editor */}
+          {editingDay && (
+            <div className="bg-slate-800 rounded-xl p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-white">
+                  <input
+                    type="text"
+                    value={workouts[editingDay].name}
+                    onChange={(e) => setWorkouts(prev => ({
+                      ...prev,
+                      [editingDay]: { ...prev[editingDay], name: e.target.value }
+                    }))}
+                    className="bg-slate-700 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </h2>
+                <button
+                  onClick={() => addExercise(editingDay)}
+                  className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Exercise
+                </button>
+              </div>
+
+              <div className="space-y-3">
+                {workouts[editingDay].exercises.map((exercise, idx) => (
+                  <div key={idx} className="bg-slate-900 rounded-lg p-4 border border-slate-700">
+                    <div className="grid grid-cols-12 gap-3 items-center">
+                      <div className="col-span-1 flex flex-col gap-1">
+                        <button
+                          onClick={() => moveExercise(editingDay, idx, 'up')}
+                          disabled={idx === 0}
+                          className="p-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-slate-800 transition-colors"
+                        >
+                          <ChevronUp className="w-4 h-4 text-slate-300" />
+                        </button>
+                        <button
+                          onClick={() => moveExercise(editingDay, idx, 'down')}
+                          disabled={idx === workouts[editingDay].exercises.length - 1}
+                          className="p-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-slate-800 transition-colors"
+                        >
+                          <ChevronDown className="w-4 h-4 text-slate-300" />
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={exercise.name}
+                        onChange={(e) => updateExercise(editingDay, idx, 'name', e.target.value)}
+                        className="col-span-3 bg-slate-800 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Exercise name"
+                      />
+                      <input
+                        type="text"
+                        value={exercise.reps}
+                        onChange={(e) => updateExercise(editingDay, idx, 'reps', e.target.value)}
+                        className="col-span-2 bg-slate-800 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Reps"
+                      />
+                      <input
+                        type="number"
+                        value={exercise.baseSets}
+                        onChange={(e) => updateExercise(editingDay, idx, 'baseSets', parseInt(e.target.value))}
+                        className="col-span-1 bg-slate-800 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="Sets"
+                      />
+                      <input
+                        type="number"
+                        value={exercise.baseRir}
+                        onChange={(e) => updateExercise(editingDay, idx, 'baseRir', parseInt(e.target.value))}
+                        className="col-span-1 bg-slate-800 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="RIR"
+                      />
+                      <select
+                        value={exercise.progression}
+                        onChange={(e) => updateExercise(editingDay, idx, 'progression', e.target.value)}
+                        className="col-span-3 bg-slate-800 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="maintain">Maintain</option>
+                        <option value="linear">Linear</option>
+                        <option value="moderate">Moderate</option>
+                        <option value="aggressive">Aggressive</option>
+                      </select>
+                      <button
+                        onClick={() => removeExercise(editingDay, idx)}
+                        className="col-span-1 bg-red-500 hover:bg-red-600 text-white p-2 rounded-lg transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                    
+                    {/* Week Preview */}
+                    <div className="mt-3 pt-3 border-t border-slate-700">
+                      <div className="grid grid-cols-5 gap-2 text-xs">
+                        {[1, 2, 3, 4, 5].map(week => {
+                          const sets = getSetsForWeek(exercise, week);
+                          const rir = getRirForWeek(exercise, week);
+                          return (
+                            <div key={week} className="bg-slate-800 rounded p-2 text-center">
+                              <div className="text-slate-400">W{week}</div>
+                              <div className="text-white font-semibold">{sets}x{exercise.reps}</div>
+                              <div className="text-green-400">RIR {rir}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!editingDay && (
+            <div className="bg-slate-800 rounded-xl p-8 text-center">
+              <p className="text-slate-400">Select a day above to edit exercises</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Tracking View
+  const workout = workouts[currentDay];
+  
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
+      <div className="max-w-2xl mx-auto">
+        {/* Header */}
+        <div className="bg-slate-800 rounded-t-xl p-6 border-b border-slate-700">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <Dumbbell className="w-8 h-8 text-blue-400" />
+              <div>
+                <h1 className="text-2xl font-bold text-white">{blockName}</h1>
+                <p className="text-sm text-slate-400">{blockNote}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setView('setup')}
+              className="text-slate-400 hover:text-white transition-colors"
+            >
+              <Edit2 className="w-5 h-5" />
+            </button>
+          </div>
+          
+          {/* Week Selector */}
+          <div className="flex items-center justify-between bg-slate-900 rounded-lg p-3">
+            <button
+              onClick={() => setCurrentWeek(Math.max(1, currentWeek - 1))}
+              disabled={currentWeek === 1}
+              className="p-2 rounded-lg hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5 text-slate-300" />
+            </button>
+            
+            <div className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-blue-400" />
+              <span className="text-lg font-semibold text-white">Week {currentWeek}</span>
+            </div>
+            
+            <button
+              onClick={() => setCurrentWeek(Math.min(5, currentWeek + 1))}
+              disabled={currentWeek === 5}
+              className="p-2 rounded-lg hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-transparent transition-colors"
+            >
+              <ChevronRight className="w-5 h-5 text-slate-300" />
+            </button>
+          </div>
+        </div>
+
+        {/* Day Selector */}
+        <div className="bg-slate-800 p-4 border-b border-slate-700">
+          <div className="grid grid-cols-5 gap-2">
+            {[1, 2, 3, 4, 5].map(day => (
+              <button
+                key={day}
+                onClick={() => setCurrentDay(day)}
+                className={`py-3 px-2 rounded-lg font-medium transition-all ${
+                  currentDay === day
+                    ? 'bg-blue-500 text-white shadow-lg scale-105'
+                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                }`}
+              >
+                Day {day}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Workout Details */}
+        <div className="bg-slate-800 rounded-b-xl p-6">
+          <h2 className="text-xl font-bold text-white mb-6">{workout.name}</h2>
+          
+          <div className="space-y-4">
+            {workout.exercises.map((exercise, idx) => {
+              const sets = getSetsForWeek(exercise, currentWeek);
+              const rir = getRirForWeek(exercise, currentWeek);
+              const data = getData(idx);
+              const progressData = getProgressData(currentDay, idx);
+              
+              return (
+                <div
+                  key={idx}
+                  className="bg-slate-900 rounded-lg p-4 border border-slate-700 hover:border-slate-600 transition-colors"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <h3 className="font-semibold text-white text-lg">{exercise.name}</h3>
+                    <div className="text-sm text-slate-400">{exercise.reps} reps</div>
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-4 mb-3">
+                    <div className="bg-slate-800 rounded-lg p-3">
+                      <div className="text-xs text-slate-400 mb-1">Sets</div>
+                      <div className="text-2xl font-bold text-blue-400">{sets}</div>
+                    </div>
+                    
+                    <div className="bg-slate-800 rounded-lg p-3">
+                      <div className="text-xs text-slate-400 mb-1">RIR</div>
+                      <div className="text-2xl font-bold text-green-400">{rir}</div>
+                    </div>
+                    
+                    <div className="bg-slate-800 rounded-lg p-3">
+                      <div className="text-xs text-slate-400 mb-1">Weight</div>
+                      <input
+                        type="text"
+                        value={data.weight}
+                        onChange={(e) => handleWeightChange(idx, e.target.value)}
+                        placeholder="kg"
+                        className="w-full bg-slate-700 text-white text-xl font-bold rounded px-2 py-1 text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Progress Bar */}
+                  <div className="bg-slate-800 rounded-lg p-2">
+                    <div className="text-xs text-slate-400 mb-1">Progress</div>
+                    <div className="flex gap-1">
+                      {progressData.map((weight, weekIdx) => (
+                        <div
+                          key={weekIdx}
+                          className={`flex-1 text-center py-1 rounded text-xs font-semibold ${
+                            weekIdx + 1 === currentWeek
+                              ? 'bg-blue-500 text-white'
+                              : weight !== '-'
+                              ? 'bg-green-500 text-white'
+                              : 'bg-slate-700 text-slate-500'
+                          }`}
+                        >
+                          {weight !== '-' ? weight : 'W' + (weekIdx + 1)}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default WorkoutTracker;
